@@ -5,6 +5,10 @@ import { useElementSize } from 'usehooks-ts';
 import { Stage } from '@pixi/react';
 import { ConvexProvider, useConvex, useQuery } from 'convex/react';
 import PlayerDetails from './PlayerDetails.tsx';
+import { MessageBoard } from './MessageBoard.tsx';
+import { ActivityFeed } from './ActivityFeed.tsx';
+import { AgentProfile } from './AgentProfile.tsx';
+import { DirectMessage } from './DirectMessage.tsx';
 import { api } from '../../convex/_generated/api';
 import { useWorldHeartbeat } from '../hooks/useWorldHeartbeat.ts';
 import { useHistoricalTime } from '../hooks/useHistoricalTime.ts';
@@ -14,12 +18,15 @@ import { useServerGame } from '../hooks/serverGame.ts';
 
 export const SHOW_DEBUG_UI = !!import.meta.env.VITE_SHOW_DEBUG_UI;
 
+type Tab = 'activity' | 'chat' | 'message';
+
 export default function Game() {
   const convex = useConvex();
   const [selectedElement, setSelectedElement] = useState<{
     kind: 'player';
     id: GameId<'players'>;
   }>();
+  const [activeTab, setActiveTab] = useState<Tab>('activity');
   const [gameWrapperRef, { width, height }] = useElementSize();
 
   const worldStatus = useQuery(api.world.defaultWorldStatus);
@@ -48,8 +55,6 @@ export default function Game() {
           <div className="absolute inset-0">
             <div className="container">
               <Stage width={width} height={height} options={{ backgroundColor: 0x7ab5ff }}>
-                {/* Re-propagate context because contexts are not shared between renderers.
-https://github.com/michalochman/react-pixi-fiber/issues/145#issuecomment-531549215 */}
                 <ConvexProvider client={convex}>
                   <PixiGame
                     game={game}
@@ -70,14 +75,82 @@ https://github.com/michalochman/react-pixi-fiber/issues/145#issuecomment-5315492
           className="flex flex-col overflow-y-auto shrink-0 px-4 py-6 sm:px-6 lg:w-96 xl:pr-6 border-t-8 sm:border-t-0 sm:border-l-8 border-brown-900  bg-brown-800 text-brown-100"
           ref={scrollViewRef}
         >
-          <PlayerDetails
-            worldId={worldId}
-            engineId={engineId}
-            game={game}
-            playerId={selectedElement?.id}
-            setSelectedElement={setSelectedElement}
-            scrollViewRef={scrollViewRef}
-          />
+          {/* Tabs */}
+          <div className="flex gap-1 mb-3">
+            <button
+              onClick={() => setActiveTab('activity')}
+              className={`flex-1 text-xs font-bold py-2 px-3 rounded-lg transition-colors ${
+                activeTab === 'activity'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-brown-700 text-brown-300 hover:bg-brown-600'
+              }`}
+            >
+              Activity
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`flex-1 text-xs font-bold py-2 px-3 rounded-lg transition-colors ${
+                activeTab === 'chat'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-brown-700 text-brown-300 hover:bg-brown-600'
+              }`}
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveTab('message')}
+              className={`flex-1 text-xs font-bold py-2 px-3 rounded-lg transition-colors ${
+                activeTab === 'message'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-brown-700 text-brown-300 hover:bg-brown-600'
+              }`}
+            >
+              Message
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'activity' && (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-bold text-amber-400 mb-2">All Conversations</h3>
+                <ActivityFeed worldId={worldId} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <div className="space-y-3">
+              {selectedElement?.id ? (
+                <>
+                  <AgentProfile worldId={worldId} playerId={selectedElement.id} />
+                  <PlayerDetails
+                    worldId={worldId}
+                    engineId={engineId}
+                    game={game}
+                    playerId={selectedElement?.id}
+                    setSelectedElement={setSelectedElement}
+                    scrollViewRef={scrollViewRef}
+                  />
+                </>
+              ) : (
+                <div className="text-brown-400 text-xs italic text-center py-8">
+                  Click on an agent on the map to see their profile and chat history.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'message' && (
+            <div className="space-y-3">
+              <MessageBoard
+                worldId={worldId}
+                engineId={engineId}
+                playerId={selectedElement?.id}
+              />
+              <DirectMessage worldId={worldId} engineId={engineId} />
+            </div>
+          )}
         </div>
       </div>
     </>

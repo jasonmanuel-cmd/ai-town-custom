@@ -255,3 +255,113 @@ export const previousConversation = query({
     return null;
   },
 });
+
+// Get agent memory and journal
+export const agentMemory = query({
+  args: {
+    worldId: v.id('worlds'),
+    playerId,
+  },
+  handler: async (ctx, args) => {
+    const memories = await ctx.db
+      .query('memories')
+      .withIndex('playerId', (q) => q.eq('playerId', args.playerId))
+      .order('desc')
+      .take(20);
+    return memories;
+  },
+});
+
+// Get all recent conversations for activity feed
+export const allConversations = query({
+  args: {
+    worldId: v.id('worlds'),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 30;
+    const conversations = await ctx.db
+      .query('archivedConversations')
+      .withIndex('worldId', (q) => q.eq('worldId', args.worldId))
+      .order('desc')
+      .take(limit);
+    
+    // Get messages for each conversation
+    const out = [];
+    for (const conv of conversations) {
+      const messages = await ctx.db
+        .query('messages')
+        .withIndex('conversationId', (q) => q.eq('worldId', args.worldId).eq('conversationId', conv.id))
+        .collect();
+      
+      // Get participant names
+      const participantNames = [];
+      for (const pid of conv.participants) {
+        const desc = await ctx.db
+          .query('playerDescriptions')
+          .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', pid))
+          .first();
+        participantNames.push(desc?.name || 'Unknown');
+      }
+      
+      out.push({
+        ...conv,
+        participantNames,
+        messageCount: messages.length,
+        lastMessage: messages.length > 0 ? messages[messages.length - 1].text : null,
+      });
+    }
+    return out;
+  },
+});
+
+// Join a conversation with an agent directly
+export const joinConversation = mutation({
+  args: {
+    worldId: v.id('worlds'),
+    agentPlayerId: playerId,
+  },
+  handler: async (ctx, args) => {
+    // Find the human player
+    const world = await ctx.db.get(args.worldId);
+    if (!world) throw new Error('World not found');
+    
+    const humanPlayer = world.players.find((p: any) => p.human);
+    if (!humanPlayer) throw new Error('No human player found');
+    
+    // Find the agent's player
+    const agentPlayer = world.players.find((p: any) => p.id === args.agentPlayerId);
+    if (!agentPlayer) throw new Error('Agent not found');
+    
+    // Start conversation
+    await insertInput(ctx, args.worldId, 'startConversation', {
+      playerId: humanPlayer.id,
+      invitee: args.agentPlayerId,
+    });
+    
+    return { success: true };
+  },
+});
+
+// Get messages for a specific conversation
+export const viewPlayerConversation = query({
+  args: {
+    worldId: v.id('worlds'),
+    conversationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query('messages')
+      .withIndex('conversationId', (q) => q.eq('worldId', args.worldId).eq('conversationId', args.conversationId))
+      .collect();
+    const out = [];
+    for (const message of messages) {
+      const playerDescription = await ctx.db
+        .query('playerDescriptions')
+        .withIndex('worldId', (q) => q.eq('worldId', args.worldId).eq('playerId', message.author))
+        .first();
+      out.push({ ...message, authorName: playerDescription?.name || 'Unknown' });
+    }
+    return out;
+  },
+});

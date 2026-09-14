@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { agentId, conversationId, parseGameId } from './ids';
+import { agentId, conversationId, parseGameId, playerId } from './ids';
 import { Player, activity } from './player';
 import { Conversation, conversationInputs } from './conversation';
 import { movePlayer } from './movement';
@@ -150,6 +150,17 @@ export const agentInputs = {
         }),
       );
       return { agentId };
+    },
+  }),
+  finishBoardPost: inputHandler({
+    args: {
+      playerId,
+      timestamp: v.number(),
+    },
+    handler: (game, now, args) => {
+      // No-op: the post is already in the database.
+      // This input just marks the operation as complete.
+      return null;
     },
   }),
 };
